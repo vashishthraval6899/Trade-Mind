@@ -34,3 +34,4 @@ def query_llm(prompt: str, max_tokens: int = 500, temperature: float = 0.3):
         raise Exception(f"OpenRouter Error: {response.text}")
 
     return response.json()["choices"][0]["message"]["content"].strip()
+
