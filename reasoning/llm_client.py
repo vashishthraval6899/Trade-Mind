@@ -1,51 +1,36 @@
 import os
+import requests
 from dotenv import load_dotenv
-from google import genai
-from google.genai.types import GenerateContentConfig
 
-# Load environment variables
 load_dotenv()
 
-def query_llm(prompt: str, max_tokens: int = 1500, temperature: float = 0.3):
-    """
-    Sends prompt to Gemini API using strict JSON response mode.
-    """
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-    api_key = os.getenv("GEMINI_API_KEY")
-    model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+def query_llm(prompt: str, max_tokens: int = 500, temperature: float = 0.3):
+
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    model = os.getenv("OPENROUTER_MODEL", "mistralai/mistral-7b-instruct")
 
     if not api_key:
-        raise Exception("GEMINI_API_KEY not found.")
+        raise Exception("OPENROUTER_API_KEY not found.")
 
-    try:
-        client = genai.Client(api_key=api_key)
-
-        response = client.models.generate_content(
-            model=model_name,
-            contents=prompt,
-            config=GenerateContentConfig(
-                temperature=temperature,
-                max_output_tokens=max_tokens,
-                response_mime_type="application/json"  # 🔥 FORCE STRICT JSON
-            )
-        )
-
-        if not response.text:
-            raise ValueError("Empty response from Gemini")
-
-        return response.text.strip()
-
-    except Exception as e:
-        print("Gemini API Error:", str(e))
-        raise
-
-
-# Local test
-if __name__ == "__main__":
-    test_prompt = """
-    Return strictly this JSON:
-    {
-      "message": "hello world"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
     }
-    """
-    print(query_llm(test_prompt))
+
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": temperature,
+        "max_tokens": max_tokens
+    }
+
+    response = requests.post(OPENROUTER_URL, headers=headers, json=payload)
+
+    if response.status_code != 200:
+        raise Exception(f"OpenRouter Error: {response.text}")
+
+    return response.json()["choices"][0]["message"]["content"].strip()
