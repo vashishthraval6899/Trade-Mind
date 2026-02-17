@@ -1,42 +1,54 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from analyze import analyze
 
 app = FastAPI(title="TradeMind API")
 
-# --- FIX 1: ADD CORS MIDDLEWARE ---
-# This allows your browser/frontend to talk to this backend without the 405 Error.
+# -------------------------------
+# CORS Middleware
+# -------------------------------
+# Allows frontend applications to communicate with this backend.
+# In production, replace "*" with your frontend domain.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows requests from any website (change this to your specific URL in production)
+    allow_origins=["*"],  
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods (POST, GET, OPTIONS, etc.)
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
+# -------------------------------
+# Request Schema
+# -------------------------------
 class AnalyzeRequest(BaseModel):
     ticker: str
 
+# -------------------------------
+# Health Check Endpoint
+# -------------------------------
 @app.get("/")
 def health():
     return {"status": "TradeMind API is running"}
 
-# --- FIX 2: HANDLE POST REQUESTS AT THE ROOT ---
-# Your JS fetches "https://...app", so we need a POST handler at "/"
-@app.post("/")
-def analyze_stock_root(request: AnalyzeRequest):
-    try:
-        result = analyze(request.ticker)
-        return result
-    except Exception as e:
-        return {"error": str(e)}
-
-# (Optional) Keeping this if you ever want to use /analyze explicitly
+# -------------------------------
+# Stock Analysis Endpoint
+# -------------------------------
 @app.post("/analyze")
 def analyze_stock(request: AnalyzeRequest):
     try:
         result = analyze(request.ticker)
+
+        if not isinstance(result, dict):
+            raise ValueError("Analyze function did not return JSON.")
+
         return result
+
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+
     except Exception as e:
-        return {"error": str(e)}
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal Server Error: {str(e)}"
+        )
