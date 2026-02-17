@@ -6,51 +6,35 @@ def safe_parse(response):
     if not response:
         raise ValueError("Empty LLM response")
 
-    # Extract JSON block
-    json_match = re.search(r"\{.*\}", response, re.DOTALL)
-
-    if not json_match:
-        raise ValueError(f"No JSON found in response:\n{response}")
-
-    json_text = json_match.group(0)
-
-    # Clean invalid control characters
-    json_text = json_text.replace("\n", " ")
-    json_text = json_text.replace("\r", " ")
-    json_text = json_text.replace("\t", " ")
-
-    # Remove smart quotes (if any)
-    json_text = json_text.replace("“", '"').replace("”", '"')
-
     try:
-        return json.loads(json_text)
+        return json.loads(response)
     except json.JSONDecodeError as e:
-        raise ValueError(f"JSON decode failed.\nExtracted:\n{json_text}\nError:{e}")
+        raise ValueError(f"Invalid JSON returned:\n{response[:300]}\nError:{e}")
 
 
 def bull_agent(evidence):
     prompt = f"""
 You are a bullish equity analyst.
 
-Based on the evidence below, provide:
+Analyze the evidence and return ONLY strict JSON.
 
-1. A concise Bull Summary (max 5 sentences)
-2. A Bull Score between 0 and 100
+Requirements:
+- bull_summary: max 120 words
+- bull_score: integer 0-100
 
-Return strictly valid JSON:
+Return EXACT JSON:
+
 {{
-  "bull_summary": "short summary paragraph",
+  "bull_summary": "...",
   "bull_score": 0
 }}
 
-Do not include markdown.
-Do not include backticks.
-Start directly with {{ and end with }}.
+No commentary. No markdown. No extra text.
 
 Evidence:
-{evidence}
+{evidence[:4000]}
 """
-    raw = query_llm(prompt, max_tokens=350)
+    raw = query_llm(prompt, max_tokens=900)
     return safe_parse(raw)
 
 
@@ -58,59 +42,54 @@ def bear_agent(evidence):
     prompt = f"""
 You are a bearish equity analyst.
 
-Based on the evidence below, provide:
+Analyze the evidence and return ONLY strict JSON.
 
-1. A concise Bear Summary (max 5 sentences)
-2. A Bear Score between 0 and 100
+Requirements:
+- bear_summary: max 120 words
+- bear_score: integer 0-100
 
-Return strictly valid JSON:
+Return EXACT JSON:
+
 {{
-  "bear_summary": "short summary paragraph",
+  "bear_summary": "...",
   "bear_score": 0
 }}
 
-Do not include markdown.
-Do not include backticks.
-Start directly with {{ and end with }}.
+No commentary. No markdown. No extra text.
 
 Evidence:
-{evidence}
+{evidence[:4000]}
 """
-    raw = query_llm(prompt, max_tokens=350)
+    raw = query_llm(prompt, max_tokens=900)
     return safe_parse(raw)
+
 
 def judge_agent(bull_output, bear_output, score_label, final_score):
     prompt = f"""
 You are a neutral portfolio manager.
 
-Quantitative Metrics:
+Inputs:
 Bull Score: {bull_output.get("bull_score")}
 Bear Score: {bear_output.get("bear_score")}
-Final Score (Bull - Bear): {final_score}
-Preliminary Decision (Score-Based): {score_label}
+Final Score: {final_score}
+Preliminary Decision: {score_label}
 
-Bull Analysis:
+Bull Summary:
 {bull_output.get("bull_summary")}
 
-Bear Analysis:
+Bear Summary:
 {bear_output.get("bear_summary")}
 
-Your task:
-1. Validate the score-based decision.
-2. Provide a short 3–4 sentence final reasoning summary.
-3. Confirm final Decision: BUY / HOLD / SELL.
-4. Assign confidence: Low / Medium / High.
+Return ONLY strict JSON:
 
-Return strict JSON:
 {{
   "final_decision": "BUY/HOLD/SELL",
   "confidence": "Low/Medium/High",
-  "final_summary": "text"
+  "final_summary": "max 100 words"
 }}
 
-Do not include markdown.
-Start directly with {{ and end with }}.
+No commentary. No markdown. Only JSON.
 """
-    raw = query_llm(prompt, max_tokens=350)
+    raw = query_llm(prompt, max_tokens=700)
     return safe_parse(raw)
 
